@@ -34,9 +34,8 @@ makeFinalIso = reify >=> \case
         makeFinalType ctx name (map simplifyBinder binders) [ctor]
     _ -> error "makeFinalIso only accepts plain ADTs (data or newtype)"
   where
-    simplifyBinder (PlainTV b)        = PlainTV b
     simplifyBinder (KindedTV b StarT) = PlainTV b
-    simplifyBinder (KindedTV b k)     = KindedTV b k
+    simplifyBinder b = b
 
 makeFinalType :: Cxt -> Name -> [TyVarBndr] -> [Con] -> DecsQ
 makeFinalType ctx name binders ctors = do
