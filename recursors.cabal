@@ -21,11 +21,12 @@ library
 test-suite test
   default-language: Haskell2010
   type:             exitcode-stdio-1.0
-  ghc-options:      -Wall -fno-warn-deprecated-flags -ddump-splices
+  ghc-options:      -Wall -fno-warn-deprecated-flags -ddump-splices -threaded
   hs-source-dirs:   test
   main-is:          Main.hs
   build-depends: 
       base               >=3
-    -- , hspec              >= 1.4.4
-    -- , hspec-expectations >= 0.3
+    , hspec              >= 1.4.4
+    , hspec-expectations >= 0.3
+    , QuickCheck
     , recursors

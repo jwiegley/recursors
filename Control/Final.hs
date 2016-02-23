@@ -26,32 +26,32 @@ funType = foldr' (AppT . AppT ArrowT)
 funCall :: Exp -> [Exp] -> Exp
 funCall = foldl' AppE
 
-makeFinalIso :: Name -> DecsQ
-makeFinalIso = reify >=> \case
+makeFinalIso :: String -> Name -> DecsQ
+makeFinalIso dest = reify >=> \case
     TyConI (DataD ctx name binders ctors _) ->
-        makeFinalType ctx name (map simplifyBinder binders) ctors
+        makeFinalType dest ctx name (map simplifyBinder binders) ctors
     TyConI (NewtypeD ctx name binders ctor _) ->
-        makeFinalType ctx name (map simplifyBinder binders) [ctor]
+        makeFinalType dest ctx name (map simplifyBinder binders) [ctor]
     _ -> error "makeFinalIso only accepts plain ADTs (data or newtype)"
   where
     simplifyBinder (KindedTV b StarT) = PlainTV b
     simplifyBinder b = b
 
-makeFinalType :: Cxt -> Name -> [TyVarBndr] -> [Con] -> DecsQ
-makeFinalType ctx name binders ctors = do
+makeFinalType :: String -> Cxt -> Name -> [TyVarBndr] -> [Con] -> DecsQ
+makeFinalType dest ctx name binders ctors = do
     -- The final encoding is named StreamR
     -- The final unwrapper is foldStreamR
     -- The final type is 'forall r. (a -> r -> r) -> r'
     -- newtype StreamR a = StreamR { foldStreamR :: 'foldType' }
-    let nameR     = mkName (nameBase name ++ "R")
-        foldNameR = mkName ("fold" ++ nameBase name ++ "R")
-        nameR'    = mkName (nameBase name ++ "R")
+    let nameR     = mkName dest
+        foldNameR = mkName ("fold" ++ dest)
+        nameR'    = mkName dest
         newType   =
             NewtypeD ctx nameR binders
                      (RecC nameR' [(foldNameR, NotStrict, foldType)]) []
 
     -- toStreamR :: Stream a -> StreamR a
-    let nameToNameR = mkName ("to" ++ nameBase name ++ "R")
+    let nameToNameR = mkName ("to" ++ dest)
     funs    <- ctorFuns
     matches <- ctorMatches funs foldNameR nameToNameR
     let xname   = mkName "x"
@@ -64,7 +64,7 @@ makeFinalType ctx name binders ctors = do
     -- fromStreamR :: StreamR a -> Stream a
     let fromBody = NormalB (funCall (VarE foldNameR)
                                     (VarE xname : map (ConE . ctorName) ctors))
-        nameFromNameR = mkName ("from" ++ nameBase name ++ "R")
+        nameFromNameR = mkName ("from" ++ dest)
         fromNameR =
             [ SigD nameFromNameR (funSig ArrowT nameR name)
             , FunD nameFromNameR [Clause [VarP xname] fromBody []] ]
@@ -72,7 +72,7 @@ makeFinalType ctx name binders ctors = do
     -- If Lens is imported, make isoStreamR :: Iso' (Stream a) (StreamR a)
     miso    <- lookupValueName "Control.Lens.iso"
     misoTyp <- lookupTypeName  "Control.Lens.Iso'"
-    let isoStreamR = mkName ("iso" ++ nameBase name ++ "R")
+    let isoStreamR = mkName ("iso" ++ dest)
         lensIsoBody iso =
             NormalB (AppE (AppE (VarE iso) (VarE nameToNameR))
                           (VarE nameFromNameR))
