@@ -1,0 +1,31 @@
+name:                recursors
+version:             0.1.0.0
+synopsis:            Auto-generate final encodings and their isomorphisms
+-- description:         
+homepage:            https://www.github.com/jwiegley/recursors
+license:             BSD3
+license-file:        LICENSE
+author:              John Wiegley
+maintainer:          johnw@newartisans.com
+category:            Language
+build-type:          Simple
+cabal-version:       >=1.10
+
+library
+  exposed-modules: Control.Final
+  build-depends:       
+      base             >=4.8 && <5.0
+    , template-haskell >=2.10 && <2.12
+  default-language: Haskell2010
+
+test-suite test
+  default-language: Haskell2010
+  type:             exitcode-stdio-1.0
+  ghc-options:      -Wall -fno-warn-deprecated-flags -ddump-splices
+  hs-source-dirs:   test
+  main-is:          Main.hs
+  build-depends: 
+      base               >=3
+    -- , hspec              >= 1.4.4
+    -- , hspec-expectations >= 0.3
+    , recursors
