@@ -28,9 +28,9 @@ funCall = foldl' AppE
 
 makeFinalIso :: String -> Name -> DecsQ
 makeFinalIso dest = reify >=> \case
-    TyConI (DataD ctx name binders ctors _) ->
+    TyConI (DataD ctx name binders _ ctors _) ->
         makeFinalType dest ctx name (map simplifyBinder binders) ctors
-    TyConI (NewtypeD ctx name binders ctor _) ->
+    TyConI (NewtypeD ctx name binders _ ctor _) ->
         makeFinalType dest ctx name (map simplifyBinder binders) [ctor]
     _ -> error "makeFinalIso only accepts plain ADTs (data or newtype)"
   where
@@ -43,12 +43,13 @@ makeFinalType dest ctx name binders ctors = do
     -- The final unwrapper is foldStreamR
     -- The final type is 'forall r. (a -> r -> r) -> r'
     -- newtype StreamR a = StreamR { foldStreamR :: 'foldType' }
+    ns <- bang noSourceUnpackedness noSourceStrictness
     let nameR     = mkName dest
         foldNameR = mkName ("fold" ++ dest)
         nameR'    = mkName dest
         newType   =
-            NewtypeD ctx nameR binders
-                     (RecC nameR' [(foldNameR, NotStrict, foldType)]) []
+            NewtypeD ctx nameR binders Nothing
+                     (RecC nameR' [(foldNameR, ns, foldType)]) []
 
     -- toStreamR :: Stream a -> StreamR a
     let nameToNameR = mkName ("to" ++ dest)
@@ -94,16 +95,20 @@ makeFinalType dest ctx name binders ctors = do
             $ funType rt
             $ map (ctorToFunc rt) ctors
       where
-        ctorToFunc r (NormalC _ ts)     = funType r (map snd ts)
-        ctorToFunc r (RecC _ ts)        = funType r (map (\(_,_,x) -> x) ts)
-        ctorToFunc r (InfixC t1 _ t2)   = funType r [snd t1, snd t2]
-        ctorToFunc r (ForallC bs ct co) = ForallT bs ct (ctorToFunc r co)
+        ctorToFunc r (NormalC _ ts)      = funType r (map snd ts)
+        ctorToFunc r (RecC _ ts)         = funType r (map (\(_,_,x) -> x) ts)
+        ctorToFunc r (InfixC t1 _ t2)    = funType r [snd t1, snd t2]
+        ctorToFunc r (ForallC bs ct co)  = ForallT bs ct (ctorToFunc r co)
+        ctorToFunc _ GadtC {}            = error "Unsupported: GadtC"
+        ctorToFunc _ RecGadtC {}         = error "Unsupported: RecGadtC"
 
     -- Return just the name of the constructor
-    ctorName (NormalC n _)    = n
-    ctorName (RecC n _)       = n
-    ctorName (InfixC _ n _)   = n
-    ctorName (ForallC _ _ co) = ctorName co
+    ctorName (NormalC n _)      = n
+    ctorName (RecC n _)         = n
+    ctorName (InfixC _ n _)     = n
+    ctorName (ForallC _ _ co)   = ctorName co
+    ctorName (GadtC _ns _ _)    = error "Unsupported: GadtC"
+    ctorName (RecGadtC _ns _ _) = error "Unsupported: RecGadtC"
 
     -- Return a list of function names based on our constructor names, where
     -- FooBar becomes fooBar, etc.
@@ -120,11 +125,13 @@ makeFinalType dest ctx name binders ctors = do
                       (NormalB (foldl' app (VarE f)
                                        (zip (map VarE args) poss))) []
       where
-        ctorArgCount (NormalC _ ts)   = map (\(_,t)   -> t == nameBaseType) ts
-        ctorArgCount (RecC _ ts)      = map (\(_,_,t) -> t == nameBaseType) ts
-        ctorArgCount (InfixC t1 _ t2) = [snd t1 == nameBaseType,
-                                         snd t2 == nameBaseType]
-        ctorArgCount (ForallC _ _ co) = ctorArgCount co
+        ctorArgCount (NormalC _ ts)     = map (\(_,t)   -> t == nameBaseType) ts
+        ctorArgCount (RecC _ ts)        = map (\(_,_,t) -> t == nameBaseType) ts
+        ctorArgCount (InfixC t1 _ t2)   = [snd t1 == nameBaseType,
+                                           snd t2 == nameBaseType]
+        ctorArgCount (ForallC _ _ co)   = ctorArgCount co
+        ctorArgCount (GadtC _ns _ _)    = error "Unsupported: GadtC"
+        ctorArgCount (RecGadtC _ns _ _) = error "Unsupported: RecGadtC"
 
         app acc (arg, recurse) =
             AppE acc $ if recurse
