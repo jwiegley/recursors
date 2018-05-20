@@ -1,5 +1,5 @@
 name:                recursors
-version:             0.1.0.0
+version:             0.1.0.1
 synopsis:            Auto-generate final encodings and their isomorphisms using Template Haskell
 -- description:         
 homepage:            https://www.github.com/jwiegley/recursors
